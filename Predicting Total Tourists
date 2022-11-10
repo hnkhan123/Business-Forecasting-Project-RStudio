@@ -1,0 +1,184 @@
+rm(list=ls(all=TRUE))
+library(dplyr)
+library(lubridate)
+library(forecast)
+library(ggplot2)
+library(timeDate)
+library(zoo)
+library(clock)
+library(tidyverse)
+library(tseries)
+
+#Reading Data
+data.thai <- readxl::read_xlsx('Thai.xlsx')
+data.thai
+
+#Grouping by Months
+data.thai.g <- data.thai %>%
+  group_by(`Month year`) %>% summarise(tourists1 = sum(tourists))
+data.thai.g
+
+#Changing Name of Month year column
+colnames(data.thai.g) [1] <- "month_year"
+
+data.thai.g
+view(data.thai.g)
+
+#Changing format of month_year column
+data.thai.g$month_year <-  as.yearmon(data.thai.g$month_year)
+data.thai.g
+
+
+#Visualizing
+ggplot(data.thai.g, aes(month_year, y = tourists1)) + geom_line() + scale_x_yearmon(format="%Y")
+
+#Converting into time series
+data.thai.g.ts <- ts(data.thai.g, start = c(2010,1), end = c(2010,84), frequency =12)
+
+data.thai.g.ts
+
+
+
+#Deleting the extra column
+data.thai.g.ts.1 <- data.thai.g.ts[,-1]
+data.thai.g.ts.1
+
+
+
+#Decomposing Time Series
+
+decomposed_data <- decompose(data.thai.g.ts.1)
+decomposed_data
+autoplot(decomposed_data)
+
+# Dividing into Train and Validation Sets (5 years = Train, 2 = Validation)
+
+ntrain <- 60
+nvalid <- 24
+
+train.ts <- window(data.thai.g.ts.1, starts = c(2010, 1), end = c (2010, ntrain))
+
+train.ts
+
+
+valid.ts <- window(data.thai.g.ts.1, starts = c(2010, ntrain +1), end = c(2010, ntrain +nvalid))
+
+valid.ts
+
+
+#Mean model
+
+aver.pred <- meanf(train.ts, h=24)
+autoplot(aver.pred, xlab = "Weeks" , ylab = " Tourists")
+
+
+plot(train.ts, ylim = c(1, 3500000), ylab = "Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2017), main = "Meanf Forecasting vs validation set data")
+axis(1, 2010:2017)
+lines(aver.pred$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+
+accuracy(aver.pred,valid.ts)
+
+
+#snaive
+
+snaive.pred <- snaive(train.ts, 24)
+autoplot(snaive.pred, xlab = "Time", ylab = "Tourists")
+
+plot(train.ts, ylim = c(1, 3500000), ylab = "Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2017), main = "Snaive vs validation set data")
+axis(1, 2010:2017)
+lines(snaive.pred$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+accuracy(snaive.pred, valid.ts)
+
+#Regression (Trend + Season)
+
+train.lm1 <- tslm(train.ts ~trend+season)
+train.lm.pred1 <- forecast(train.lm1, h = 24)
+autoplot(train.lm.pred1, xlab = "Years", ylab = "Tourists", main = "Forecasts from Linear Regression Model with Seasonality and trend")
+
+
+plot(train.ts, ylim = c(1, 3500000), ylab = "Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2017), main = "Regression Forecasting vs validation set data")
+axis(1, 2010:2017)
+lines(train.lm.pred1$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+
+accuracy(train.lm.pred1,valid.ts)
+
+#Holt winters
+bicup.hw <- ets(train.ts, model = "ZAM")
+hw.pred <- forecast(bicup.hw, h=24)
+hw.pred
+autoplot(hw.pred, xlab = "Years", ylab = "Tourists", main = "Forecasts from Holt Winter")
+
+
+plot(train.ts, ylim = c(1, 3500000), ylab = "Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2017), main = "Holt Winter Forecasting vs validation set data")
+axis(1, 2010:2017)
+lines(hw.pred$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+
+accuracy(hw.pred,valid.ts)
+
+
+#Tbat Model
+
+tbats_model <- tbats(train.ts)
+tbats_forecast <- forecast(tbats_model, h= 24)
+tbats_forecast
+
+autoplot(tbats_forecast, xlab = "Years", ylab = "Tourists", main = "Forecasts from Tbats")
+plot(train.ts, ylim = c(1, 3500000), ylab = "Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2017), main = "Tbats Forecasting vs Validation Data")
+axis(1, 2010:2017)
+lines(tbats_forecast$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+
+accuracy(tbats_forecast,valid.ts)
+
+
+#Two year prediction using HW
+test.pred<- forecast(bicup.hw,h=48)
+test.pred
+
+autoplot(test.pred, xlab = "Years", ylab = "Tourists", main = "Forecasts from Holt Winter Validation + Test")
+
+plot(train.ts, ylim = c(1, 3500000), ylab = "No. of Tourists", xlab = "Years", bty = "l",
+     xaxt = "n", xlim = c(2010,2019))
+axis(1, 2010:2019)
+lines(test.pred$mean, lwd = 2, col = "blue", lty = 1)
+lines(valid.ts, col = "grey20", lty = 3)
+lines(c(2015, 2015), c(0, 3500000), col='green')
+lines(c(2017, 2017), c(0, 3500000), col='green')
+lines(c(2019,2019), c(0,3500000), col = 'green')
+text(2012, 3350000, "Training")
+text(2016, 3350000, "Validation")
+text(2018, 3350000, "Test")
+
+test.pred
+
+
+
