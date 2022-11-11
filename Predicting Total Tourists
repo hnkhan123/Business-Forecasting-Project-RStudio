@@ -180,5 +180,18 @@ text(2018, 3350000, "Test")
 
 test.pred
 
+data.thai.g.ts <- ts(data.thai.g, start = c(2010,1), end = c(2010,84), frequency =12)
 
+data.thai.g.ts
+
+#Converting into quarterly timeseries and repeating the same analysis as above
+
+
+data.thai.g.ts.q <-ts(data.thai.g, start = c(2010,1),end=c(2016,4),frequency=4)
+
+ntrain <- 20
+nvalid <- 8
+
+train.ts <- window(data.thai.g.ts.q, start = c(2010, 1), end = c (2010, ntrain))
+valid.ts <- window(data.thai.g.ts.q, start = c(2010, ntrain +1), end = c(2010, ntrain +nvalid))
 
